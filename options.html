@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GitHub PR Tracker · Settings</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header>
+        <h1>Settings</h1>
+        <p class="muted">
+          Uses the GitHub account already signed in to this browser. No personal access token.
+        </p>
+      </header>
+
+      <section class="card">
+        <h2>Browser sign-in</h2>
+        <p id="sessionStatus" class="hint">Checking this browser…</p>
+        <div class="actions">
+          <button id="openGitHub" type="button" class="secondary">Open GitHub</button>
+          <button id="recheck" type="button" class="secondary">Check again</button>
+        </div>
+      </section>
+
+      <form id="settingsForm" class="card">
+        <label>
+          <span>GitHub username</span>
+          <input id="username" name="username" type="text" autocomplete="username" placeholder="octocat" required />
+          <small class="hint">Pull requests authored by this user, in the repos below. The browser session only needs access to those repos.</small>
+        </label>
+
+        <label>
+          <span>Repositories (one per line, <code>owner/repo</code>)</span>
+          <textarea
+            id="repos"
+            name="repos"
+            rows="10"
+            placeholder="acme/frontend&#10;acme/api&#10;acme/docs"
+            required
+          ></textarea>
+        </label>
+
+        <div class="actions">
+          <button id="saveBtn" type="submit">Save settings</button>
+          <span id="saveStatus" class="muted" aria-live="polite"></span>
+        </div>
+      </form>
+    </main>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

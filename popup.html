@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GitHub PR Tracker</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>PR Tracker</h1>
+        <p id="updatedAt" class="muted">Loading…</p>
+      </div>
+      <div class="top-actions">
+        <button id="refreshBtn" class="icon-btn" title="Refresh" type="button" aria-label="Refresh">
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+            <path fill="currentColor" d="M8 2.2a5.8 5.8 0 0 1 5.1 3h-2.3a.7.7 0 0 0 0 1.4h4.1a.7.7 0 0 0 .7-.7V1.8a.7.7 0 0 0-1.4 0v1.7A7.2 7.2 0 1 0 15.1 9a.7.7 0 1 0-1.4-.3A5.8 5.8 0 1 1 8 2.2z"/>
+          </svg>
+        </button>
+        <button id="settingsBtn" class="icon-btn" title="Settings" type="button">⚙</button>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="Main sections">
+      <button class="tab active" data-tab="open" type="button">Open <span id="openCount" class="count">0</span></button>
+      <button class="tab" data-tab="merged" type="button">Merged 48h <span id="mergedCount" class="count">0</span></button>
+    </nav>
+
+    <div id="openFilters" class="filters">
+      <button class="chip active" data-filter="all" type="button">All</button>
+      <button class="chip" data-filter="approved" type="button">Approved</button>
+      <button class="chip" data-filter="awaiting" type="button">Awaiting</button>
+      <button class="chip" data-filter="comments" type="button">Comments</button>
+      <button class="chip" data-filter="behind" type="button">Update</button>
+    </div>
+
+    <div id="status" class="status" hidden></div>
+    <main id="list" class="list"></main>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
