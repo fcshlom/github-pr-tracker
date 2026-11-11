@@ -1,0 +1,32 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pack extension
+        run: |
+          version="$(jq -r .version manifest.json)"
+          mkdir -p dist
+          zip -r "dist/github-pr-tracker-${version}.zip" \
+            manifest.json background.js \
+            popup.html popup.css popup.js \
+            options.html options.css options.js \
+            icons lib \
+            -x "lib/alerts.test.js"
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/github-pr-tracker-*.zip
+          generate_release_notes: true
