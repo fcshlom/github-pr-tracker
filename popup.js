@@ -65,6 +65,37 @@ listEl.addEventListener("click", (event) => {
   runAction(item, button.dataset.action);
 });
 
+const unresolvedPop = document.getElementById("unresolvedPop");
+let unresolvedHideTimer = 0;
+
+listEl.addEventListener("mouseover", (event) => {
+  const badge = event.target.closest("[data-unresolved-id]");
+  if (!badge) {
+    return;
+  }
+  showUnresolvedPop(badge);
+});
+
+listEl.addEventListener("mouseout", (event) => {
+  const badge = event.target.closest("[data-unresolved-id]");
+  if (!badge) {
+    return;
+  }
+  scheduleHideUnresolvedPop();
+});
+
+unresolvedPop.addEventListener("mouseenter", () => {
+  window.clearTimeout(unresolvedHideTimer);
+});
+
+unresolvedPop.addEventListener("mouseleave", () => {
+  scheduleHideUnresolvedPop();
+});
+
+listEl.addEventListener("scroll", () => {
+  hideUnresolvedPop();
+});
+
 load({ force: false });
 setInterval(() => {
   if (!refreshBtn.disabled) {
@@ -96,6 +127,7 @@ async function load({ force }) {
 }
 
 function render() {
+  hideUnresolvedPop();
   const open = Array.isArray(state.data.open) ? state.data.open : [];
   const merged = Array.isArray(state.data.merged) ? state.data.merged : [];
   openCountEl.textContent = String(open.length);
@@ -139,7 +171,7 @@ function renderCard(item, isMerged) {
   }
   let unresolvedBadge = "";
   if (!isMerged && item.unresolvedKnown && item.unresolvedCount > 0) {
-    unresolvedBadge = `<span class="badge unresolved">Unresolved · ${escapeHtml(String(item.unresolvedCount))}</span>`;
+    unresolvedBadge = `<span class="badge unresolved" data-unresolved-id="${escapeAttr(item.id)}">Unresolved · ${escapeHtml(String(item.unresolvedCount))}</span>`;
   }
   const badges = [];
   if (isMerged) {
@@ -269,6 +301,59 @@ async function runAction(item, action) {
     state.pendingId = "";
     render();
   }
+}
+
+function showUnresolvedPop(badge) {
+  window.clearTimeout(unresolvedHideTimer);
+  const item = (state.data.open || []).find((pull) => pull.id === badge.dataset.unresolvedId);
+  const comments = Array.isArray(item?.unresolvedComments) ? item.unresolvedComments : [];
+  unresolvedPop.innerHTML = comments.length
+    ? comments.map(renderUnresolvedComment).join("")
+    : `<div class="unresolved-item"><span class="text">Refresh to load the comments.</span></div>`;
+  unresolvedPop.hidden = false;
+  const badgeRect = badge.getBoundingClientRect();
+  const popRect = unresolvedPop.getBoundingClientRect();
+  let top = badgeRect.bottom + 6;
+  if (top + popRect.height > window.innerHeight - 8) {
+    top = badgeRect.top - popRect.height - 6;
+  }
+  let left = badgeRect.left;
+  if (left + popRect.width > window.innerWidth - 8) {
+    left = window.innerWidth - popRect.width - 8;
+  }
+  unresolvedPop.style.top = `${Math.max(8, top)}px`;
+  unresolvedPop.style.left = `${Math.max(8, left)}px`;
+}
+
+function renderUnresolvedComment(comment) {
+  const author = comment.author ? `<span class="who">${escapeHtml(comment.author)}</span>` : "";
+  const text = `<span class="text">${escapeHtml(comment.text || "Unresolved thread")}</span>`;
+  const url = githubCommentUrl(comment.url);
+  if (!url) {
+    return `<div class="unresolved-item">${author}${text}</div>`;
+  }
+  return `<a href="${escapeAttr(url)}" target="_blank" rel="noreferrer">${author}${text}</a>`;
+}
+
+function githubCommentUrl(value) {
+  try {
+    const url = new URL(String(value || ""));
+    if (url.protocol === "https:" && url.hostname === "github.com") {
+      return url.toString();
+    }
+  } catch (_error) {
+    return "";
+  }
+  return "";
+}
+
+function scheduleHideUnresolvedPop() {
+  window.clearTimeout(unresolvedHideTimer);
+  unresolvedHideTimer = window.setTimeout(hideUnresolvedPop, 150);
+}
+
+function hideUnresolvedPop() {
+  unresolvedPop.hidden = true;
 }
 
 function emptyMessage() {
