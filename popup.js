@@ -1,3 +1,5 @@
+import { escapeAttr, escapeHtml, filterOpen, githubCommentUrl } from "./lib/view.js";
+
 const listEl = document.getElementById("list");
 const statusEl = document.getElementById("status");
 const updatedAtEl = document.getElementById("updatedAt");
@@ -143,22 +145,6 @@ function render() {
   }
 
   listEl.innerHTML = items.map((item) => renderCard(item, state.tab === "merged")).join("");
-}
-
-function filterOpen(open, filter) {
-  if (filter === "approved") {
-    return open.filter((item) => item.category === "approved");
-  }
-  if (filter === "awaiting") {
-    return open.filter((item) => item.category === "awaiting");
-  }
-  if (filter === "comments") {
-    return open.filter((item) => item.hasComments);
-  }
-  if (filter === "behind") {
-    return open.filter((item) => item.needsUpdate);
-  }
-  return open;
 }
 
 function renderCard(item, isMerged) {
@@ -335,18 +321,6 @@ function renderUnresolvedComment(comment) {
   return `<a href="${escapeAttr(url)}" target="_blank" rel="noreferrer">${author}${text}</a>`;
 }
 
-function githubCommentUrl(value) {
-  try {
-    const url = new URL(String(value || ""));
-    if (url.protocol === "https:" && url.hostname === "github.com") {
-      return url.toString();
-    }
-  } catch (_error) {
-    return "";
-  }
-  return "";
-}
-
 function scheduleHideUnresolvedPop() {
   window.clearTimeout(unresolvedHideTimer);
   unresolvedHideTimer = window.setTimeout(hideUnresolvedPop, 150);
@@ -423,14 +397,3 @@ function formatRelative(value) {
   return rtf.format(Math.round(deltaSec / 86400), "day");
 }
 
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
-function escapeAttr(value) {
-  return escapeHtml(value).replaceAll("'", "&#39;");
-}

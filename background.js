@@ -1,6 +1,6 @@
 import { getSettings, getCache, saveCache, getAlertSnapshot, saveAlertSnapshot, getAutopilotIds, setAutopilotId, getAutopilotAttempts, saveAutopilotAttempts } from "./lib/storage.js";
 import { fetchPrDashboard, performPrAction } from "./lib/github.js";
-import { diffPrAlerts } from "./lib/notify.js";
+import { alertTitle, diffPrAlerts } from "./lib/notify.js";
 import { shouldAutopilotUpdate } from "./lib/autopilot.js";
 
 const ALARM_NAME = "refresh-prs";
@@ -242,16 +242,6 @@ async function showPrAlerts(events) {
     delete notificationLinks[oldId];
   }
   await chrome.storage.local.set({ notificationLinks });
-}
-
-function alertTitle(event) {
-  if (event.type === "comments") {
-    return event.delta > 1 ? `${event.delta} new comments` : "New comment";
-  }
-  if (event.type === "approved") {
-    return "Pull request approved";
-  }
-  return "CI failed";
 }
 
 async function refreshBadge() {
