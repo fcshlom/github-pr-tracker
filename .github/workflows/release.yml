@@ -23,7 +23,7 @@ jobs:
             popup.html popup.css popup.js \
             options.html options.css options.js \
             icons lib \
-            -x "lib/alerts.test.js"
+            -x "lib/*.test.js" -x "test/*"
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
