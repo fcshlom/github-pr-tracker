@@ -5,6 +5,7 @@ import {
   getAutopilotIds,
   getCache,
   getSettings,
+  normalizeRefreshSeconds,
   normalizeRepos,
   saveCache,
   saveSettings,
@@ -27,7 +28,10 @@ test("repository settings accept a list or a blob of github urls", () => {
 test("saving settings trims the username and deletes a stored token", async () => {
   seedLocal({ token: "secret" });
   await saveSettings({ username: " ada ", repos: "https://github.com/acme/web.git" });
-  assert.deepEqual(await getSettings(), { username: "ada", repos: ["acme/web"] });
+  assert.deepEqual(await getSettings(), { username: "ada", repos: ["acme/web"], refreshSeconds: 20 });
+  assert.equal(normalizeRefreshSeconds(25), 30);
+  assert.equal(normalizeRefreshSeconds(5), 20);
+  assert.equal(normalizeRefreshSeconds(999), 300);
   assert.equal((await chrome.storage.local.get({})).token, undefined);
 });
 

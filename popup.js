@@ -1,4 +1,5 @@
-import { escapeAttr, escapeHtml, filterOpen, githubCommentUrl } from "./lib/view.js";
+import { REFRESH_DEFAULT_SEC, getSettings, normalizeRefreshSeconds } from "./lib/storage.js";
+import { escapeAttr, escapeHtml, filterOpen, filterRepos, githubCommentUrl, repoNames } from "./lib/view.js";
 
 const listEl = document.getElementById("list");
 const statusEl = document.getElementById("status");
@@ -11,11 +12,13 @@ const mergedCountEl = document.getElementById("mergedCount");
 
 const state = {
   tab: "open",
-  filter: "all",
+  filters: {},
   data: { open: [], merged: [] },
   cacheUpdatedAt: 0,
   pendingId: "",
   autopilotIds: {},
+  hiddenRepos: new Set(),
+  repoMenuOpen: false,
 };
 
 document.querySelectorAll(".tab").forEach((tabBtn) => {
@@ -29,13 +32,29 @@ document.querySelectorAll(".tab").forEach((tabBtn) => {
 });
 
 document.querySelectorAll(".chip").forEach((chipBtn) => {
+  chipBtn.dataset.label = chipBtn.textContent;
+  if (chipBtn.dataset.filter !== "all") {
+    chipBtn.title = "Click to include, again to exclude, again to clear.";
+  }
   chipBtn.addEventListener("click", () => {
-    state.filter = chipBtn.dataset.filter;
-    document.querySelectorAll(".chip").forEach((btn) => btn.classList.remove("active"));
-    chipBtn.classList.add("active");
+    const name = chipBtn.dataset.filter;
+    if (name === "all") {
+      state.filters = {};
+    } else {
+      const current = state.filters[name];
+      if (!current) {
+        state.filters[name] = "include";
+      } else if (current === "include") {
+        state.filters[name] = "exclude";
+      } else {
+        delete state.filters[name];
+      }
+    }
+    paintChips();
     render();
   });
 });
+paintChips();
 
 refreshBtn.addEventListener("click", () => load({ force: true }));
 settingsBtn.addEventListener("click", () => chrome.runtime.openOptionsPage());
@@ -98,12 +117,68 @@ listEl.addEventListener("scroll", () => {
   hideUnresolvedPop();
 });
 
-load({ force: false });
-setInterval(() => {
-  if (!refreshBtn.disabled) {
-    load({ force: true });
+const repoFilterEl = document.getElementById("repoFilter");
+const repoFilterBtn = document.getElementById("repoFilterBtn");
+const repoFilterMenu = document.getElementById("repoFilterMenu");
+
+repoFilterEl.addEventListener("click", (event) => {
+  event.stopPropagation();
+});
+
+repoFilterBtn.addEventListener("click", () => {
+  state.repoMenuOpen = !state.repoMenuOpen;
+  render();
+});
+
+repoFilterMenu.addEventListener("change", (event) => {
+  const box = event.target.closest("input[data-repo]");
+  if (!box) {
+    return;
   }
-}, 20 * 1000);
+  if (box.checked) {
+    state.hiddenRepos.delete(box.dataset.repo);
+  } else {
+    state.hiddenRepos.add(box.dataset.repo);
+  }
+  render();
+});
+
+document.addEventListener("click", () => {
+  if (!state.repoMenuOpen) {
+    return;
+  }
+  state.repoMenuOpen = false;
+  render();
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || !state.repoMenuOpen) {
+    return;
+  }
+  state.repoMenuOpen = false;
+  render();
+});
+
+load({ force: false });
+let refreshTimer = 0;
+
+function startRefreshTimer(refreshSeconds) {
+  window.clearInterval(refreshTimer);
+  refreshTimer = window.setInterval(() => {
+    if (!refreshBtn.disabled) {
+      load({ force: true });
+    }
+  }, refreshSeconds * 1000);
+}
+
+getSettings()
+  .then((settings) => startRefreshTimer(settings.refreshSeconds))
+  .catch(() => startRefreshTimer(REFRESH_DEFAULT_SEC));
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "sync" && changes.refreshSeconds) {
+    startRefreshTimer(normalizeRefreshSeconds(changes.refreshSeconds.newValue));
+  }
+});
 
 async function load({ force }) {
   setBusy(true);
@@ -130,21 +205,67 @@ async function load({ force }) {
 
 function render() {
   hideUnresolvedPop();
-  const open = Array.isArray(state.data.open) ? state.data.open : [];
-  const merged = Array.isArray(state.data.merged) ? state.data.merged : [];
+  const repos = repoNames([...(state.data.open || []), ...(state.data.merged || [])]);
+  if (repos.length < 2) {
+    state.hiddenRepos.clear();
+  }
+  const open = filterRepos(Array.isArray(state.data.open) ? state.data.open : [], state.hiddenRepos);
+  const merged = filterRepos(Array.isArray(state.data.merged) ? state.data.merged : [], state.hiddenRepos);
   openCountEl.textContent = String(open.length);
   mergedCountEl.textContent = String(merged.length);
   updatedAtEl.textContent = state.cacheUpdatedAt
     ? `Updated ${formatRelative(state.cacheUpdatedAt)}`
     : "Not loaded yet";
+  updateRepoFilter(repos);
 
-  const items = state.tab === "merged" ? merged : filterOpen(open, state.filter);
+  const items = state.tab === "merged" ? merged : filterOpen(open, state.filters);
+  const unfiltered = state.tab === "merged"
+    ? (state.data.merged || [])
+    : filterOpen(state.data.open || [], state.filters);
   if (!items.length) {
-    listEl.innerHTML = `<div class="empty">${emptyMessage()}</div>`;
+    listEl.innerHTML = `<div class="empty">${unfiltered.length ? "No pull requests in the selected projects." : emptyMessage()}</div>`;
     return;
   }
 
   listEl.innerHTML = items.map((item) => renderCard(item, state.tab === "merged")).join("");
+}
+
+function updateRepoFilter(repos) {
+  if (repos.length < 2) {
+    repoFilterEl.hidden = true;
+    state.repoMenuOpen = false;
+    return;
+  }
+  repoFilterEl.hidden = false;
+  const selected = repos.filter((repo) => !state.hiddenRepos.has(repo));
+  repoFilterBtn.textContent = selected.length === repos.length
+    ? "All projects"
+    : selected.length === 1
+      ? selected[0]
+      : `${selected.length} projects`;
+  repoFilterBtn.setAttribute("aria-expanded", state.repoMenuOpen ? "true" : "false");
+  repoFilterMenu.hidden = !state.repoMenuOpen;
+  const signature = repos.join("\n");
+  if (repoFilterMenu.dataset.repos === signature) {
+    return;
+  }
+  repoFilterMenu.dataset.repos = signature;
+  repoFilterMenu.innerHTML = repos.map((repo) => {
+    const checked = state.hiddenRepos.has(repo) ? "" : "checked";
+    return `<label class="repo-option"><input type="checkbox" data-repo="${escapeAttr(repo)}" ${checked}> ${escapeHtml(repo)}</label>`;
+  }).join("");
+}
+
+function paintChips() {
+  const anyFilter = Object.keys(state.filters).length > 0;
+  document.querySelectorAll(".chip").forEach((chipBtn) => {
+    const mode = state.filters[chipBtn.dataset.filter];
+    const label = chipBtn.dataset.label || chipBtn.textContent;
+    chipBtn.textContent = mode === "exclude" ? `Not ${label}` : label;
+    chipBtn.classList.toggle("active", chipBtn.dataset.filter === "all" ? !anyFilter : mode === "include");
+    chipBtn.classList.toggle("excluded", mode === "exclude");
+    chipBtn.setAttribute("aria-pressed", mode ? "true" : "false");
+  });
 }
 
 function renderCard(item, isMerged) {
@@ -219,6 +340,20 @@ function renderCard(item, isMerged) {
       }>Update branch</button>`
     );
   }
+  if (!isMerged && item.draft) {
+    actions.push(
+      `<button type="button" data-action="mark-ready" data-id="${escapeAttr(item.id)}" ${
+        state.pendingId === item.id ? "disabled" : ""
+      }>Mark ready</button>`
+    );
+  }
+  if (!isMerged && !item.draft && item.canMerge) {
+    actions.push(
+      `<button type="button" data-action="merge" data-id="${escapeAttr(item.id)}" ${
+        state.pendingId === item.id ? "disabled" : ""
+      }>Merge</button>`
+    );
+  }
   if (!isMerged && item.mergeKnown && (item.autoMerge ? item.canDisableAutoMerge !== false : item.canEnableAutoMerge !== false)) {
     const label = item.autoMerge ? "Turn off auto-merge" : "Turn on auto-merge";
     actions.push(
@@ -262,6 +397,9 @@ function renderCiProgress(item) {
 }
 
 async function runAction(item, action) {
+  if (action === "merge" && !window.confirm(`Merge pull request #${item.number}?`)) {
+    return;
+  }
   state.pendingId = item.id;
   hideStatus();
   render();
@@ -275,12 +413,23 @@ async function runAction(item, action) {
       updateMethod: item.updateMethod,
       mergeMethod: item.mergeMethod,
       autoMerge: item.autoMerge,
+      title: item.title,
     });
     if (!response?.ok) {
       throw new Error(response?.error || "GitHub action failed.");
     }
-    Object.assign(item, response.mergeState || {});
-    showStatus(action === "update-branch" ? "Branch update requested." : "Auto-merge updated.", false);
+    if (response.mergeState?.merged) {
+      state.data.open = (state.data.open || []).filter((pull) => pull.id !== item.id);
+      showStatus("Pull request merged.", false);
+    } else {
+      Object.assign(item, response.mergeState || {});
+      const statusText = action === "update-branch"
+        ? "Branch update requested."
+        : action === "mark-ready"
+          ? "Marked ready for review."
+          : "Auto-merge updated.";
+      showStatus(statusText, false);
+    }
   } catch (error) {
     showStatus(error.message || String(error), true);
   } finally {
@@ -334,17 +483,8 @@ function emptyMessage() {
   if (state.tab === "merged") {
     return "No pull requests merged in the last 48 hours.";
   }
-  if (state.filter === "approved") {
-    return "No approved open pull requests.";
-  }
-  if (state.filter === "awaiting") {
-    return "Nothing awaiting a response.";
-  }
-  if (state.filter === "comments") {
-    return "No open pull requests with comments.";
-  }
-  if (state.filter === "behind") {
-    return "No open pull requests need a branch update.";
+  if (Object.keys(state.filters).length) {
+    return "No pull requests match these filters.";
   }
   return "No open pull requests. Configure repos in Settings if this looks wrong.";
 }

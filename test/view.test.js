@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { escapeAttr, escapeHtml, filterOpen, githubCommentUrl } from "../lib/view.js";
+import { escapeAttr, escapeHtml, filterOpen, filterRepos, githubCommentUrl, repoNames } from "../lib/view.js";
 
 const open = [
   { id: "1", category: "approved", hasComments: true, needsUpdate: false },
@@ -15,6 +15,17 @@ test("open filters keep the matching pulls", () => {
   assert.deepEqual(filterOpen(open, "comments").map((item) => item.id), ["1", "3"]);
   assert.deepEqual(filterOpen(open, "behind").map((item) => item.id), ["2"]);
   assert.deepEqual(filterOpen(open, "nope").map((item) => item.id), ["1", "2", "3"]);
+});
+
+test("status filters combine and can exclude", () => {
+  const pulls = [
+    { id: "1", category: "awaiting", draft: true, ciFailed: true },
+    { id: "2", category: "approved", draft: false, ciFailed: true },
+  ];
+  assert.deepEqual(filterOpen(pulls, { draft: "include", ci: "include" }).map((item) => item.id), ["1"]);
+  assert.deepEqual(filterOpen(pulls, { draft: "exclude", ci: "include" }).map((item) => item.id), ["2"]);
+  assert.deepEqual(repoNames([{ repo: "acme/web" }, { repo: "acme/api" }, { repo: "acme/web" }]), ["acme/web", "acme/api"]);
+  assert.deepEqual(filterRepos(pulls, new Set()), pulls);
 });
 
 test("comment links stay on https github.com", () => {

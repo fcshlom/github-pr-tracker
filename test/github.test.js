@@ -206,6 +206,20 @@ test("merge box reports behind, conflicts, auto-merge, and the allowed update me
   assert.equal(dirty.autoMerge, false);
   assert.equal(dirty.headSha, "fallback");
   assert.equal(dirty.mergeMethod, "SQUASH");
+  assert.equal(summarizeMergeBox({
+    pullRequest: {
+      mergeStateStatus: "CLEAN",
+      autoMergeRequest: null,
+      headRefOid: SHA,
+      viewerMergeActions: [{ name: "AUTO_MERGE", mergeMethods: [] }],
+    },
+    elsewhere: {
+      viewerMergeActions: [{
+        name: "DIRECT_MERGE",
+        mergeMethods: [{ name: "SQUASH", allowableStatus: "ALLOWED" }],
+      }],
+    },
+  }).directMergeMethod, "SQUASH");
   assert.equal(summarizeMergeBox({ mergeStateStatus: "UNMERGEABLE" }).hasConflicts, true);
   assert.equal(summarizeMergeBox({ headRefOid: SHA }).mergeKnown, false);
   assert.equal(summarizeMergeBox({}), null);
@@ -514,7 +528,7 @@ test("unknown actions do not call github", async () => {
     throw new Error("no");
   };
   await assert.rejects(
-    () => performPrAction({ action: "merge", repo: "acme/web", number: 4 }),
+    () => performPrAction({ action: "nope", repo: "acme/web", number: 4 }),
     /Unknown pull request action/
   );
   assert.equal(calls, 0);
