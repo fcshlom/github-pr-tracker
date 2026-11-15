@@ -1,11 +1,16 @@
 import { getSettings, saveSettings } from "./lib/storage.js";
 import { readBrowserSession } from "./lib/session.js";
+import { listAccessibleRepos } from "./lib/repos.js";
 
 const form = document.getElementById("settingsForm");
 const usernameEl = document.getElementById("username");
 const reposEl = document.getElementById("repos");
+const refreshEl = document.getElementById("refreshSeconds");
+const refreshValueEl = document.getElementById("refreshValue");
 const saveStatusEl = document.getElementById("saveStatus");
 const sessionStatusEl = document.getElementById("sessionStatus");
+const repoListStatusEl = document.getElementById("repoListStatus");
+const repoChoicesEl = document.getElementById("repoChoices");
 const openGitHubBtn = document.getElementById("openGitHub");
 const recheckBtn = document.getElementById("recheck");
 
@@ -15,8 +20,14 @@ async function init() {
   const settings = await getSettings();
   usernameEl.value = settings.username;
   reposEl.value = settings.repos.join("\n");
+  refreshEl.value = String(settings.refreshSeconds);
+  showRefreshValue();
   await refreshSession();
 }
+
+refreshEl.addEventListener("input", () => {
+  showRefreshValue();
+});
 
 openGitHubBtn.addEventListener("click", () => {
   window.open("https://github.com/login", "_blank", "noopener");
@@ -24,6 +35,21 @@ openGitHubBtn.addEventListener("click", () => {
 
 recheckBtn.addEventListener("click", () => {
   refreshSession();
+});
+
+repoChoicesEl.addEventListener("change", (event) => {
+  const box = event.target.closest("input[data-repo]");
+  if (!box) {
+    return;
+  }
+  const lines = repoLines();
+  const key = repoKey(box.dataset.repo);
+  const without = lines.filter((line) => repoKey(line) !== key);
+  reposEl.value = (box.checked ? [...without, box.dataset.repo] : without).join("\n");
+});
+
+reposEl.addEventListener("input", () => {
+  syncRepoChecks();
 });
 
 form.addEventListener("submit", async (event) => {
@@ -48,7 +74,7 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
-  await saveSettings({ username, repos });
+  await saveSettings({ username, repos, refreshSeconds: Number(refreshEl.value) });
   saveStatusEl.textContent = "Saved.";
   saveStatusEl.className = "muted ok";
 
@@ -64,6 +90,8 @@ async function refreshSession() {
   if (!session.signedIn) {
     sessionStatusEl.textContent = "This browser is not signed in to GitHub. Open GitHub, sign in, then check again.";
     sessionStatusEl.className = "hint warn";
+    repoChoicesEl.innerHTML = "";
+    repoListStatusEl.textContent = "Sign in, then the list loads here.";
     return;
   }
 
@@ -73,4 +101,64 @@ async function refreshSession() {
   if (!usernameEl.value.trim() && session.login) {
     usernameEl.value = session.login;
   }
+  if (!session.login) {
+    repoListStatusEl.textContent = "Signed in, but the GitHub username was not available.";
+    return;
+  }
+  await loadRepoChoices(session.login);
+}
+
+async function loadRepoChoices(login) {
+  repoListStatusEl.textContent = "Loading repositories from GitHub…";
+  try {
+    const repos = await listAccessibleRepos(login);
+    repoChoicesEl.innerHTML = repos.map((repo) => {
+      return `<label class="repo-choice"><input type="checkbox" data-repo="${escapeAttr(repo)}"> ${escapeHtml(repo)}</label>`;
+    }).join("");
+    syncRepoChecks();
+    repoListStatusEl.textContent = repos.length
+      ? `${repos.length} repositories. Check the ones to track.`
+      : "No repositories were found for this account. Add owner/repo below.";
+  } catch (error) {
+    repoChoicesEl.innerHTML = "";
+    repoListStatusEl.textContent = error?.message || "Could not load repositories.";
+  }
+}
+
+function syncRepoChecks() {
+  const tracked = new Set(repoLines().map(repoKey));
+  for (const box of repoChoicesEl.querySelectorAll("input[data-repo]")) {
+    box.checked = tracked.has(repoKey(box.dataset.repo));
+  }
+}
+
+function showRefreshValue() {
+  const seconds = Number(refreshEl.value);
+  refreshValueEl.textContent = seconds % 60 === 0
+    ? `${seconds / 60} ${seconds === 60 ? "minute" : "minutes"}`
+    : `${seconds} seconds`;
+}
+
+function repoLines() {
+  return reposEl.value.split(/[\n,]+/).map((line) => line.trim()).filter(Boolean);
+}
+
+function repoKey(value) {
+  return String(value || "")
+    .trim()
+    .replace(/^https?:\/\/github\.com\//i, "")
+    .replace(/\.git$/i, "")
+    .replace(/\/$/, "")
+    .toLowerCase();
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value).replaceAll('"', "&quot;");
 }

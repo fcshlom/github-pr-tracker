@@ -31,15 +31,29 @@
           <small class="hint">Pull requests authored by this user, in the repos below. The browser session only needs access to those repos.</small>
         </label>
 
+        <div class="repo-access">
+          <span>Repositories you can access</span>
+          <p class="hint">Loaded from the signed-in GitHub account: repositories on that profile, and the first page of each organization listed there.</p>
+          <p id="repoListStatus" class="hint">Sign in, then the list loads here.</p>
+          <div id="repoChoices" class="repo-choices"></div>
+        </div>
+
         <label>
-          <span>Repositories (one per line, <code>owner/repo</code>)</span>
+          <span>Tracked repositories (one per line, <code>owner/repo</code>)</span>
           <textarea
             id="repos"
             name="repos"
-            rows="10"
+            rows="8"
             placeholder="acme/frontend&#10;acme/api&#10;acme/docs"
             required
           ></textarea>
+          <small class="hint">Checked repositories are added here. Add any other owner/repo the list does not show.</small>
+        </label>
+
+        <label>
+          <span>Update interval <output id="refreshValue">20 seconds</output></span>
+          <input id="refreshSeconds" name="refreshSeconds" type="range" min="20" max="300" step="10" value="20" />
+          <small class="hint">How often the popup reloads pull requests. Chrome may run background checks no faster than about every 30 seconds.</small>
         </label>
 
         <div class="actions">

@@ -4,7 +4,6 @@ import { alertTitle, diffPrAlerts } from "./lib/notify.js";
 import { shouldAutopilotUpdate } from "./lib/autopilot.js";
 
 const ALARM_NAME = "refresh-prs";
-const REFRESH_MS = 20 * 1000;
 const BADGE_COLORS = {
   ok: "#1f6feb",
   warn: "#d29922",
@@ -18,6 +17,12 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 ensureRefreshAlarm().catch(() => {});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "sync" && changes.refreshSeconds) {
+    ensureRefreshAlarm().catch(() => {});
+  }
+});
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARM_NAME) {
@@ -74,7 +79,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         const { cache } = await getCache();
         const open = Array.isArray(cache?.open) ? cache.open : [];
         const target = open.find((item) => item.repo === message.repo && item.number === message.number);
-        if (target) {
+        if (mergeState?.merged) {
+          if (cache) {
+            cache.open = open.filter((item) => item !== target);
+            await saveCache(cache);
+          }
+        } else if (target) {
           Object.assign(target, mergeState);
           await saveCache(cache);
         }
@@ -113,7 +123,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 let refreshInFlight = null;
 
 async function ensureRefreshAlarm() {
-  const periodInMinutes = REFRESH_MS / 60000;
+  const { refreshSeconds } = await getSettings();
+  const periodInMinutes = refreshSeconds / 60;
   const alarm = await chrome.alarms.get(ALARM_NAME);
   if (!alarm || Math.abs((alarm.periodInMinutes || 0) - periodInMinutes) > 0.001) {
     await chrome.alarms.create(ALARM_NAME, { periodInMinutes });
@@ -132,12 +143,12 @@ async function refreshDashboard(force) {
 
 async function refreshDashboardNow(force) {
   const { cache, cacheUpdatedAt } = await getCache();
-  if (!force && cache && Date.now() - cacheUpdatedAt < REFRESH_MS) {
+  const settings = await getSettings();
+  if (!force && cache && Date.now() - cacheUpdatedAt < settings.refreshSeconds * 1000) {
     await updateBadgeFromCache(cache);
     return { data: cache, cacheUpdatedAt, autopilotIds: await getAutopilotIds() };
   }
 
-  const settings = await getSettings();
   const data = await fetchPrDashboard(settings);
   await saveCache(data);
   await updateBadgeFromCache(data);

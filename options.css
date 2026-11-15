@@ -72,6 +72,14 @@ label {
   font-weight: 600;
 }
 
+input[type="range"] {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--accent);
+}
+
 input,
 textarea {
   width: 100%;
@@ -95,6 +103,39 @@ textarea {
   font-weight: 400;
   color: var(--muted);
   line-height: 1.45;
+}
+
+.repo-access {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.repo-choices {
+  max-height: 240px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.repo-choices:empty {
+  display: none;
+}
+
+.repo-choice {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-weight: 400;
+}
+
+.repo-choice input {
+  width: auto;
 }
 
 code {

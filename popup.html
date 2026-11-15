@@ -30,9 +30,18 @@
     <div id="openFilters" class="filters">
       <button class="chip active" data-filter="all" type="button">All</button>
       <button class="chip" data-filter="approved" type="button">Approved</button>
-      <button class="chip" data-filter="awaiting" type="button">Awaiting</button>
+      <button class="chip" data-filter="awaiting" type="button">Awaiting response</button>
+      <button class="chip" data-filter="draft" type="button">Draft</button>
       <button class="chip" data-filter="comments" type="button">Comments</button>
       <button class="chip" data-filter="behind" type="button">Update</button>
+      <button class="chip" data-filter="ci" type="button">CI failed</button>
+      <button class="chip" data-filter="conflicts" type="button">Conflicts</button>
+      <button class="chip" data-filter="automerge" type="button">Auto-merge</button>
+    </div>
+
+    <div id="repoFilter" class="repo-filter" hidden>
+      <button id="repoFilterBtn" class="repo-filter-btn" type="button" aria-expanded="false" aria-controls="repoFilterMenu">All projects</button>
+      <div id="repoFilterMenu" class="repo-menu" hidden></div>
     </div>
 
     <div id="status" class="status" hidden></div>
