@@ -179,12 +179,12 @@ test("unresolved threads keep the first visible comment and drop resolved ones",
 
 test("merge box reports behind, conflicts, auto-merge, and the allowed update method", () => {
   const behind = summarizeMergeBox({
-    other: { mergeStateStatus: "CLEAN" },
+    other: { mergeStateStatus: "CLEAN", headRefOid: "b".repeat(40) },
     chosen: {
       mergeStateStatus: "BEHIND",
       autoMergeRequest: { enabled: true, mergeMethod: "REBASE" },
       headRefOid: SHA,
-      viewerUpdateMethods: [{ name: "REBASE" }, "MERGE"],
+      viewerUpdateMethods: [{ name: "REBASE", isDefault: true }, "MERGE"],
       viewerCanDisableAutoMerge: false,
     },
   });
@@ -192,7 +192,7 @@ test("merge box reports behind, conflicts, auto-merge, and the allowed update me
   assert.equal(behind.hasConflicts, false);
   assert.equal(behind.autoMerge, true);
   assert.equal(behind.headSha, SHA);
-  assert.equal(behind.updateMethod, "MERGE");
+  assert.equal(behind.updateMethod, "REBASE");
   assert.equal(behind.mergeMethod, "REBASE");
   assert.equal(behind.canDisableAutoMerge, false);
 
@@ -452,7 +452,7 @@ test("update-branch posts the live head and surfaces an orchestration error", as
         json: {
           mergeStateStatus: "BEHIND",
           headRefOid: SHA,
-          viewerUpdateMethods: [{ name: "REBASE" }],
+          viewerUpdateMethods: [{ name: "REBASE", isDefault: true }],
           autoMergeRequest: { enabled: true, mergeMethod: "SQUASH" },
         },
       };
