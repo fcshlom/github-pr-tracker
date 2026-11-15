@@ -23,7 +23,7 @@ function installFetch(handler) {
     const href = String(url);
     const method = init.method || "GET";
     const body = init.body ? JSON.parse(init.body) : null;
-    calls.push({ href, method, body });
+    calls.push({ href, method, body, contentType: init.headers?.["Content-Type"] || "" });
     const result = handler({ href, method, body }) || { status: 500, json: { message: "unhandled" } };
     const status = result.status ?? 200;
     return {
@@ -467,6 +467,23 @@ test("update-branch posts the live head and surfaces an orchestration error", as
   const post = calls.find((call) => call.method === "POST");
   assert.equal(post.body.updateMethod, "REBASE");
   assert.equal(post.body.expectedHeadOid, SHA);
+});
+
+test("mark-ready posts json content type and no body", async () => {
+  const calls = installFetch(({ href, method }) => {
+    if (href.includes("/page_data/mark_ready_for_review") && method === "POST") {
+      return { json: {} };
+    }
+    if (href.includes("/page_data/merge_box")) {
+      return { json: { mergeStateStatus: "CLEAN", headRefOid: SHA } };
+    }
+    return { html: META };
+  });
+  const state = await performPrAction({ action: "mark-ready", repo: "acme/web", number: 4 });
+  const post = calls.find((call) => call.method === "POST");
+  assert.equal(post.body, null);
+  assert.equal(post.contentType, "application/json");
+  assert.equal(state.draft, false);
 });
 
 test("update-branch refuses to run without a commit sha", async () => {
