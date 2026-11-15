@@ -14,6 +14,7 @@ test("open filters keep the matching pulls", () => {
   assert.deepEqual(filterOpen(open, "awaiting").map((item) => item.id), ["2", "3"]);
   assert.deepEqual(filterOpen(open, "comments").map((item) => item.id), ["1", "3"]);
   assert.deepEqual(filterOpen(open, "behind").map((item) => item.id), ["2"]);
+  assert.deepEqual(filterOpen([{ id: "1", otherBase: true }, { id: "2", otherBase: false }], "otherbase").map((item) => item.id), ["1"]);
   assert.deepEqual(filterOpen(open, "nope").map((item) => item.id), ["1", "2", "3"]);
 });
 

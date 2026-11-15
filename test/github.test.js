@@ -37,8 +37,8 @@ function installFetch(handler) {
   return calls;
 }
 
-function embedded(pulls, totalPages = 1) {
-  const json = JSON.stringify({ results: pulls, totalPages });
+function embedded(pulls, totalPages = 1, extra = {}) {
+  const json = JSON.stringify({ results: pulls, totalPages, ...extra });
   return `${META}<script type="application/json" data-target="react-app.embeddedData">${json}</script>`;
 }
 
@@ -251,7 +251,7 @@ test("fetchPrDashboard classifies review, CI, merge state, threads, and the 48 h
           pullNode({ repo: "acme/web", number: 4, title: "Approved", updatedAt: recent, commentCount: 2, category: "CI_FAILING", headSha: SHA }),
           pullNode({ repo: "acme/web", number: 4, title: "Approved", updatedAt: recent, commentCount: 2, category: "CI_FAILING", headSha: SHA }),
           pullNode({ repo: "acme/web", number: 5, title: "Changes", updatedAt: older, category: "CI_RUNNING" }),
-        ]),
+        ], 1, { defaultBranch: "main" }),
       };
     }
     if (href.includes("/page_data/merge_box")) {
@@ -262,10 +262,11 @@ test("fetchPrDashboard classifies review, CI, merge state, threads, and the 48 h
             autoMergeRequest: { enabled: true, mergeMethod: "SQUASH" },
             headRefOid: SHA,
             viewerUpdateMethods: ["MERGE"],
+            baseRefName: "main",
           },
         };
       }
-      return { json: { mergeStateStatus: "DIRTY", autoMergeRequest: null, headRefOid: "b".repeat(40) } };
+      return { json: { mergeStateStatus: "DIRTY", autoMergeRequest: null, headRefOid: "b".repeat(40), baseRefName: "release" } };
     }
     if (href.includes("/page_data/status_checks")) {
       if (href.includes("/pull/4/")) {
@@ -311,6 +312,9 @@ test("fetchPrDashboard classifies review, CI, merge state, threads, and the 48 h
   assert.equal(approved.needsUpdate, true);
   assert.equal(approved.autoMerge, true);
   assert.equal(approved.headSha, SHA);
+  assert.equal(approved.otherBase, false);
+  assert.equal(changes.baseRef, "release");
+  assert.equal(changes.otherBase, true);
   assert.equal(approved.hasComments, true);
   assert.equal(approved.unresolvedComments[0].author, "ada");
   assert.equal(approved.unresolvedComments[0].text, "please rename this");

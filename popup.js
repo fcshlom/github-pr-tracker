@@ -305,6 +305,9 @@ function renderCard(item, isMerged) {
   if (!isMerged && item.needsUpdate) {
     badges.push(`<span class="badge behind">Branch behind</span>`);
   }
+  if (!isMerged && item.otherBase && item.baseRef) {
+    badges.push(`<span class="badge base">Base · ${escapeHtml(item.baseRef)}</span>`);
+  }
   if (!isMerged && item.autoMerge) {
     badges.push(
       `<span class="badge automerge">Auto-merge · ${escapeHtml(String(item.mergeMethod || "on").toLowerCase())}</span>`

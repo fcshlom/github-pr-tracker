@@ -359,6 +359,11 @@ h1 {
   background: rgba(219, 109, 40, 0.18);
 }
 
+.badge.base {
+  color: #d2a8ff;
+  background: rgba(163, 113, 247, 0.16);
+}
+
 .badge.conflict,
 .badge.ci-failed {
   color: #ffffff;
@@ -575,6 +580,11 @@ h1 {
   .badge.behind {
     color: #bc4c00;
     background: #fff1e5;
+  }
+
+  .badge.base {
+    color: #6639ba;
+    background: #fbefff;
   }
 
   .ci-progress-label {
