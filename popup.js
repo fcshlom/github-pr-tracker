@@ -28,6 +28,7 @@ document.querySelectorAll(".tab").forEach((tabBtn) => {
     tabBtn.classList.add("active");
     openFiltersEl.hidden = state.tab !== "open";
     render();
+    saveView();
   });
 });
 
@@ -52,6 +53,7 @@ document.querySelectorAll(".chip").forEach((chipBtn) => {
     }
     paintChips();
     render();
+    saveView();
   });
 });
 paintChips();
@@ -141,6 +143,7 @@ repoFilterMenu.addEventListener("change", (event) => {
     state.hiddenRepos.add(box.dataset.repo);
   }
   render();
+  saveView();
 });
 
 document.addEventListener("click", () => {
@@ -159,7 +162,7 @@ document.addEventListener("keydown", (event) => {
   render();
 });
 
-load({ force: false });
+restoreView().finally(() => load({ force: false }));
 let refreshTimer = 0;
 
 function startRefreshTimer(refreshSeconds) {
@@ -206,8 +209,9 @@ async function load({ force }) {
 function render() {
   hideUnresolvedPop();
   const repos = repoNames([...(state.data.open || []), ...(state.data.merged || [])]);
-  if (repos.length < 2) {
+  if (repos.length < 2 && state.hiddenRepos.size) {
     state.hiddenRepos.clear();
+    saveView();
   }
   const open = filterRepos(Array.isArray(state.data.open) ? state.data.open : [], state.hiddenRepos);
   const merged = filterRepos(Array.isArray(state.data.merged) ? state.data.merged : [], state.hiddenRepos);
@@ -217,6 +221,7 @@ function render() {
     ? `Updated ${formatRelative(state.cacheUpdatedAt)}`
     : "Not loaded yet";
   updateRepoFilter(repos);
+  paintChips();
 
   const items = state.tab === "merged" ? merged : filterOpen(open, state.filters);
   const unfiltered = state.tab === "merged"
@@ -228,6 +233,38 @@ function render() {
   }
 
   listEl.innerHTML = items.map((item) => renderCard(item, state.tab === "merged")).join("");
+}
+
+function saveView() {
+  chrome.storage.session.set({
+    viewState: {
+      filters: state.filters,
+      hiddenRepos: [...state.hiddenRepos],
+      tab: state.tab,
+    },
+  }).catch(() => {});
+}
+
+async function restoreView() {
+  const stored = await chrome.storage.session.get({ viewState: null });
+  const view = stored.viewState;
+  if (!view || typeof view !== "object") {
+    return;
+  }
+  if (view.filters && typeof view.filters === "object") {
+    state.filters = view.filters;
+  }
+  if (Array.isArray(view.hiddenRepos)) {
+    state.hiddenRepos = new Set(view.hiddenRepos.filter((repo) => typeof repo === "string"));
+  }
+  if (view.tab === "open" || view.tab === "merged") {
+    state.tab = view.tab;
+    document.querySelectorAll(".tab").forEach((tabBtn) => {
+      tabBtn.classList.toggle("active", tabBtn.dataset.tab === state.tab);
+    });
+    openFiltersEl.hidden = state.tab !== "open";
+  }
+  paintChips();
 }
 
 function updateRepoFilter(repos) {
