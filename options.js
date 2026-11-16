@@ -11,6 +11,7 @@ const saveStatusEl = document.getElementById("saveStatus");
 const sessionStatusEl = document.getElementById("sessionStatus");
 const repoListStatusEl = document.getElementById("repoListStatus");
 const repoChoicesEl = document.getElementById("repoChoices");
+const repoFilterEl = document.getElementById("repoFilter");
 const openGitHubBtn = document.getElementById("openGitHub");
 const recheckBtn = document.getElementById("recheck");
 
@@ -35,6 +36,10 @@ openGitHubBtn.addEventListener("click", () => {
 
 recheckBtn.addEventListener("click", () => {
   refreshSession();
+});
+
+repoFilterEl.addEventListener("input", () => {
+  applyRepoFilter();
 });
 
 repoChoicesEl.addEventListener("change", (event) => {
@@ -91,6 +96,8 @@ async function refreshSession() {
     sessionStatusEl.textContent = "This browser is not signed in to GitHub. Open GitHub, sign in, then check again.";
     sessionStatusEl.className = "hint warn";
     repoChoicesEl.innerHTML = "";
+    repoFilterEl.hidden = true;
+    repoFilterEl.value = "";
     repoListStatusEl.textContent = "Sign in, then the list loads here.";
     return;
   }
@@ -116,13 +123,34 @@ async function loadRepoChoices(login) {
       return `<label class="repo-choice"><input type="checkbox" data-repo="${escapeAttr(repo)}"> ${escapeHtml(repo)}</label>`;
     }).join("");
     syncRepoChecks();
-    repoListStatusEl.textContent = repos.length
-      ? `${repos.length} repositories. Check the ones to track.`
-      : "No repositories were found for this account. Add owner/repo below.";
+    repoFilterEl.hidden = repos.length === 0;
+    applyRepoFilter();
   } catch (error) {
     repoChoicesEl.innerHTML = "";
+    repoFilterEl.hidden = true;
     repoListStatusEl.textContent = error?.message || "Could not load repositories.";
   }
+}
+
+function applyRepoFilter() {
+  const query = repoFilterEl.value.trim().toLowerCase();
+  const labels = [...repoChoicesEl.querySelectorAll(".repo-choice")];
+  let shown = 0;
+  for (const label of labels) {
+    const name = label.querySelector("input")?.dataset.repo || "";
+    const match = !query || name.toLowerCase().includes(query);
+    label.hidden = !match;
+    if (match) {
+      shown += 1;
+    }
+  }
+  if (!labels.length) {
+    repoListStatusEl.textContent = "No repositories were found for this account. Add owner/repo below.";
+    return;
+  }
+  repoListStatusEl.textContent = query
+    ? (shown ? `${shown} of ${labels.length} repositories.` : "No repositories match.")
+    : `${labels.length} repositories. Check the ones to track.`;
 }
 
 function syncRepoChecks() {

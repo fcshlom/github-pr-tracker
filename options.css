@@ -134,6 +134,10 @@ textarea {
   font-weight: 400;
 }
 
+.repo-choice[hidden] {
+  display: none;
+}
+
 .repo-choice input {
   width: auto;
 }
