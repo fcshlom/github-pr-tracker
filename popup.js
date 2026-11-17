@@ -1,4 +1,5 @@
 import { REFRESH_DEFAULT_SEC, getSettings, normalizeRefreshSeconds } from "./lib/storage.js";
+import { isReadyToMerge } from "./lib/autopilot.js";
 import { escapeAttr, escapeHtml, filterOpen, filterRepos, githubCommentUrl, repoNames } from "./lib/view.js";
 
 const listEl = document.getElementById("list");
@@ -169,7 +170,7 @@ function startRefreshTimer(refreshSeconds) {
   window.clearInterval(refreshTimer);
   refreshTimer = window.setInterval(() => {
     if (!refreshBtn.disabled) {
-      load({ force: true });
+      load({ force: false });
     }
   }, refreshSeconds * 1000);
 }
@@ -187,8 +188,7 @@ async function load({ force }) {
   setBusy(true);
   hideStatus();
   try {
-    const messageType = force ? "REFRESH_PRS" : "GET_CACHED_PRS";
-    const response = await sendMessage({ type: messageType, force });
+    const response = await sendMessage({ type: "REFRESH_PRS", force });
     if (!response?.ok) {
       throw new Error(response?.error || "Failed to load pull requests.");
     }
@@ -370,7 +370,7 @@ function renderCard(item, isMerged) {
   if (!isMerged) {
     const checked = state.autopilotIds[item.id] ? "checked" : "";
     actions.push(
-      `<label class="autopilot" title="When this pull request is approved, auto-merge is on, and the branch is behind, update the branch until it merges."><input type="checkbox" data-autopilot="${escapeAttr(item.id)}" ${checked}> Autopilot</label>`
+      `<label class="autopilot" title="When this pull request is approved and the branch is not behind, merge it. If it is behind and auto-merge is on, update the branch first."><input type="checkbox" data-autopilot="${escapeAttr(item.id)}" ${checked}> Autopilot</label>`
     );
   }
   if (!isMerged && item.needsUpdate && item.headSha && !item.hasConflicts) {
@@ -387,7 +387,7 @@ function renderCard(item, isMerged) {
       }>Mark ready</button>`
     );
   }
-  if (!isMerged && !item.draft && item.canMerge) {
+  if (!isMerged && isReadyToMerge(item)) {
     actions.push(
       `<button type="button" data-action="merge" data-id="${escapeAttr(item.id)}" ${
         state.pendingId === item.id ? "disabled" : ""

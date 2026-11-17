@@ -1,7 +1,7 @@
 import { getSettings, getCache, saveCache, getAlertSnapshot, saveAlertSnapshot, getAutopilotIds, setAutopilotId, getAutopilotAttempts, saveAutopilotAttempts } from "./lib/storage.js";
 import { fetchPrDashboard, performPrAction } from "./lib/github.js";
 import { alertTitle, diffPrAlerts } from "./lib/notify.js";
-import { shouldAutopilotUpdate } from "./lib/autopilot.js";
+import { shouldAutopilotMerge, shouldAutopilotUpdate } from "./lib/autopilot.js";
 
 const ALARM_NAME = "refresh-prs";
 const BADGE_COLORS = {
@@ -121,6 +121,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 });
 
 let refreshInFlight = null;
+let rateLimitedUntil = 0;
+const RATE_LIMIT_BACKOFF_MS = 3 * 60 * 1000;
 
 async function ensureRefreshAlarm() {
   const { refreshSeconds } = await getSettings();
@@ -144,18 +146,31 @@ async function refreshDashboard(force) {
 async function refreshDashboardNow(force) {
   const { cache, cacheUpdatedAt } = await getCache();
   const settings = await getSettings();
-  if (!force && cache && Date.now() - cacheUpdatedAt < settings.refreshSeconds * 1000) {
+  const now = Date.now();
+  if (!force && now < rateLimitedUntil && cache) {
+    await updateBadgeFromCache(cache);
+    return { data: cache, cacheUpdatedAt, autopilotIds: await getAutopilotIds(), rateLimited: true };
+  }
+  if (!force && cache && now - cacheUpdatedAt < settings.refreshSeconds * 1000) {
     await updateBadgeFromCache(cache);
     return { data: cache, cacheUpdatedAt, autopilotIds: await getAutopilotIds() };
   }
 
-  const data = await fetchPrDashboard(settings);
-  await saveCache(data);
-  await updateBadgeFromCache(data);
-  await publishAlerts(data.open);
-  await runAutopilot(data.open);
-  const saved = await getCache();
-  return { data, cacheUpdatedAt: saved.cacheUpdatedAt, autopilotIds: await getAutopilotIds() };
+  try {
+    const data = await fetchPrDashboard(settings);
+    rateLimitedUntil = 0;
+    await saveCache(data);
+    await updateBadgeFromCache(data);
+    await publishAlerts(data.open);
+    await runAutopilot(data.open);
+    const saved = await getCache();
+    return { data, cacheUpdatedAt: saved.cacheUpdatedAt, autopilotIds: await getAutopilotIds() };
+  } catch (error) {
+    if (/rate limited/i.test(error?.message || "")) {
+      rateLimitedUntil = Date.now() + RATE_LIMIT_BACKOFF_MS;
+    }
+    throw error;
+  }
 }
 
 async function runAutopilot(openPrs) {
@@ -164,22 +179,35 @@ async function runAutopilot(openPrs) {
   const now = Date.now();
   const { cache } = await getCache();
   let cacheDirty = false;
-  for (const item of openPrs || []) {
-    if (!shouldAutopilotUpdate(item, { enabled: Boolean(ids[item.id]), now, lastAttemptAt: Number(attempts[item.id] || 0) })) {
+  for (const item of [...(openPrs || [])]) {
+    const decision = autopilotDecision(item, { enabled: Boolean(ids[item.id]), now, lastAttemptAt: Number(attempts[item.id] || 0) });
+    if (!decision) {
       continue;
     }
     attempts[item.id] = now;
     await saveAutopilotAttempts(attempts);
     try {
       const mergeState = await performPrAction({
-        action: "update-branch",
+        action: decision,
         repo: item.repo,
         number: item.number,
         headSha: item.headSha,
         updateMethod: item.updateMethod,
         mergeMethod: item.mergeMethod,
         autoMerge: item.autoMerge,
+        title: item.title,
       });
+      if (mergeState?.merged) {
+        const index = openPrs.indexOf(item);
+        if (index >= 0) {
+          openPrs.splice(index, 1);
+        }
+        if (cache?.open) {
+          cache.open = cache.open.filter((pull) => pull.id !== item.id);
+          cacheDirty = true;
+        }
+        continue;
+      }
       Object.assign(item, mergeState || {});
       const cached = (cache?.open || []).find((pull) => pull.id === item.id);
       if (cached) {
@@ -187,7 +215,7 @@ async function runAutopilot(openPrs) {
         cacheDirty = true;
       }
     } catch (error) {
-      await notifyAutopilotFailure(item, error);
+      await notifyAutopilotFailure(item, decision, error);
     }
   }
   if (cacheDirty && cache) {
@@ -195,7 +223,17 @@ async function runAutopilot(openPrs) {
   }
 }
 
-async function notifyAutopilotFailure(item, error) {
+function autopilotDecision(item, options) {
+  if (shouldAutopilotUpdate(item, options)) {
+    return "update-branch";
+  }
+  if (shouldAutopilotMerge(item, options)) {
+    return "merge";
+  }
+  return "";
+}
+
+async function notifyAutopilotFailure(item, action, error) {
   const id = `autopilot:${item.id}:${Date.now()}`;
   const stored = await chrome.storage.local.get({ notificationLinks: {} });
   const notificationLinks = stored.notificationLinks || {};
@@ -204,8 +242,8 @@ async function notifyAutopilotFailure(item, error) {
   await chrome.notifications.create(id, {
     type: "basic",
     iconUrl: chrome.runtime.getURL("icons/icon128.png"),
-    title: "Autopilot could not update the branch",
-    message: `${item.repo} #${item.number}: ${error?.message || "Update failed"}`,
+    title: action === "merge" ? "Autopilot could not merge" : "Autopilot could not update the branch",
+    message: `${item.repo} #${item.number}: ${error?.message || "Request failed"}`,
     priority: 2,
   });
 }
@@ -262,7 +300,7 @@ async function refreshBadge() {
       await setBadge("", BADGE_COLORS.warn);
       return;
     }
-    await refreshDashboard(true);
+    await refreshDashboard(false);
   } catch (_error) {
     await setBadge("!", BADGE_COLORS.error);
   }

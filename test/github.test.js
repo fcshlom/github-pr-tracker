@@ -311,6 +311,7 @@ test("fetchPrDashboard classifies review, CI, merge state, threads, and the 48 h
   assert.equal(approved.ciFailed, false);
   assert.equal(approved.needsUpdate, true);
   assert.equal(approved.autoMerge, true);
+  assert.equal(approved.canMerge, false);
   assert.equal(approved.headSha, SHA);
   assert.equal(approved.otherBase, false);
   assert.equal(changes.baseRef, "release");
