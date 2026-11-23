@@ -7,6 +7,7 @@ import {
   getSettings,
   normalizeRefreshSeconds,
   normalizeRepos,
+  normalizeWatchedPulls,
   saveCache,
   saveSettings,
   setAutopilotId,
@@ -23,12 +24,22 @@ test("repository settings accept a list or a blob of github urls", () => {
   );
   assert.deepEqual(normalizeRepos([" https://github.com/acme/web.git ", ""]), ["acme/web"]);
   assert.deepEqual(normalizeRepos(null), []);
+  assert.deepEqual(
+    normalizeWatchedPulls("https://github.com/acme/web/pull/12\nacme/api#4\nacme/api#4"),
+    ["acme/web#12", "acme/api#4"]
+  );
+  assert.equal(normalizeWatchedPulls("not a pull").length, 0);
 });
 
 test("saving settings trims the username and deletes a stored token", async () => {
   seedLocal({ token: "secret" });
   await saveSettings({ username: " ada ", repos: "https://github.com/acme/web.git" });
-  assert.deepEqual(await getSettings(), { username: "ada", repos: ["acme/web"], refreshSeconds: 20 });
+  assert.deepEqual(await getSettings(), {
+    username: "ada",
+    repos: ["acme/web"],
+    watchedPulls: [],
+    refreshSeconds: 20,
+  });
   assert.equal(normalizeRefreshSeconds(25), 30);
   assert.equal(normalizeRefreshSeconds(5), 20);
   assert.equal(normalizeRefreshSeconds(999), 300);

@@ -1,10 +1,11 @@
-import { getSettings, saveSettings } from "./lib/storage.js";
+import { getSettings, parseWatchedPull, saveSettings } from "./lib/storage.js";
 import { readBrowserSession } from "./lib/session.js";
 import { listAccessibleRepos } from "./lib/repos.js";
 
 const form = document.getElementById("settingsForm");
 const usernameEl = document.getElementById("username");
 const reposEl = document.getElementById("repos");
+const watchedEl = document.getElementById("watchedPulls");
 const refreshEl = document.getElementById("refreshSeconds");
 const refreshValueEl = document.getElementById("refreshValue");
 const saveStatusEl = document.getElementById("saveStatus");
@@ -21,6 +22,7 @@ async function init() {
   const settings = await getSettings();
   usernameEl.value = settings.username;
   reposEl.value = settings.repos.join("\n");
+  watchedEl.value = settings.watchedPulls.join("\n");
   refreshEl.value = String(settings.refreshSeconds);
   showRefreshValue();
   await refreshSession();
@@ -79,7 +81,19 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
-  await saveSettings({ username, repos, refreshSeconds: Number(refreshEl.value) });
+  const watchedLines = watchedEl.value.split(/[\n,]+/).map((line) => line.trim()).filter(Boolean);
+  const invalidWatched = watchedLines.find((line) => !parseWatchedPull(line));
+  if (invalidWatched) {
+    saveStatusEl.textContent = `Invalid pull request: ${invalidWatched}. Use a GitHub link or owner/repo#123.`;
+    return;
+  }
+
+  await saveSettings({
+    username,
+    repos,
+    watchedPulls: watchedLines,
+    refreshSeconds: Number(refreshEl.value),
+  });
   saveStatusEl.textContent = "Saved.";
   saveStatusEl.className = "muted ok";
 

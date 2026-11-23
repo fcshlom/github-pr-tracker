@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { alertTitle, diffPrAlerts } from "../lib/notify.js";
+import { alertMessage, alertTitle, diffPrAlerts } from "../lib/notify.js";
 
 const pull = {
   id: "acme/app#7",
@@ -56,9 +56,34 @@ test("rows without an id are ignored", () => {
   assert.deepEqual(diff.next, {});
 });
 
+test("a pull notifies once when it becomes ready to merge", () => {
+  const blocked = { ...pull, approved: true, needsUpdate: true, canMerge: false };
+  const ready = { ...pull, approved: true, needsUpdate: false, draft: false, hasConflicts: false, canMerge: true };
+  const prior = diffPrAlerts(null, [blocked]).next;
+  const becameReady = diffPrAlerts(prior, [ready]);
+  assert.deepEqual(becameReady.events.map((event) => event.type), ["ready"]);
+  assert.deepEqual(diffPrAlerts(becameReady.next, [ready]).events, []);
+
+  const blockedAgain = diffPrAlerts(becameReady.next, [blocked]);
+  assert.deepEqual(blockedAgain.events, []);
+  assert.deepEqual(diffPrAlerts(blockedAgain.next, [ready]).events.map((event) => event.type), ["ready"]);
+});
+
+test("an older snapshot without a ready flag does not notify", () => {
+  const ready = { ...pull, approved: true, needsUpdate: false, draft: false, hasConflicts: false, canMerge: true };
+  const prior = diffPrAlerts(null, [ready]).next;
+  delete prior[pull.id].ready;
+  assert.deepEqual(diffPrAlerts(prior, [ready]).events, []);
+});
+
 test("alert titles match the event type", () => {
   assert.equal(alertTitle({ type: "comments", delta: 1 }), "New comment");
   assert.equal(alertTitle({ type: "comments", delta: 3 }), "3 new comments");
   assert.equal(alertTitle({ type: "approved" }), "Pull request approved");
   assert.equal(alertTitle({ type: "ci" }), "CI failed");
+  assert.equal(alertTitle({ type: "ready", pull }), "PR #7 is ready to merge");
+  assert.equal(
+    alertMessage({ type: "ready", pull }),
+    "acme/app: all checks passed and required approvals received."
+  );
 });

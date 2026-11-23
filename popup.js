@@ -320,6 +320,8 @@ function renderCard(item, isMerged) {
   const badges = [];
   if (isMerged) {
     badges.push(`<span class="badge merged">Merged</span>`);
+  } else if (item.closed) {
+    badges.push(`<span class="badge closed">Closed</span>`);
   } else if (item.category === "approved") {
     badges.push(`<span class="badge approved">Approved</span>`);
   } else if (item.changesRequested) {
@@ -407,17 +409,28 @@ function renderCard(item, isMerged) {
     <article class="card${alerts.length ? " problem" : ""}">
       ${alerts.length || unresolvedBadge ? `<div class="alert-row">${alerts.join("")}${unresolvedBadge}</div>` : ""}
       <h2 class="card-title"><a class="card-link" href="${escapeAttr(item.htmlUrl)}" target="_blank" rel="noreferrer">#${escapeHtml(String(item.number))} ${escapeHtml(item.title)}</a></h2>
-      <div class="meta">
-        <span>${escapeHtml(item.repo)}</span>
-        <span>·</span>
-        <span>${escapeHtml(formatRelative(item.updatedAt))}</span>
-        ${summaryBits.length ? `<span>·</span><span>${escapeHtml(summaryBits.join(", "))}</span>` : ""}
-      </div>
+      <div class="meta">${renderMeta(item, summaryBits)}</div>
       <div class="meta" style="margin-top:8px">${badges.join("")}</div>
       ${isMerged ? "" : renderCiProgress(item)}
       ${actions.length ? `<div class="card-actions">${actions.join("")}</div>` : ""}
     </article>
   `;
+}
+
+function renderMeta(item, summaryBits) {
+  const parts = [escapeHtml(item.repo)];
+  if (item.author) {
+    parts.push(escapeHtml(item.author));
+  }
+  if (Number.isFinite(item.changedFiles)) {
+    const files = item.changedFiles === 1 ? "1 file" : `${item.changedFiles} files`;
+    parts.push(`${files} · +${Number(item.additions || 0)} −${Number(item.deletions || 0)}`);
+  }
+  parts.push(escapeHtml(formatRelative(item.updatedAt)));
+  if (summaryBits.length) {
+    parts.push(escapeHtml(summaryBits.join(", ")));
+  }
+  return parts.map((part) => `<span>${part}</span>`).join(`<span>·</span>`);
 }
 
 function renderCiProgress(item) {

@@ -349,6 +349,11 @@ h1 {
   background: rgba(88, 166, 255, 0.16);
 }
 
+.badge.closed {
+  color: var(--muted);
+  background: rgba(139, 148, 158, 0.16);
+}
+
 .badge.draft {
   color: var(--muted);
   background: rgba(139, 148, 158, 0.16);

@@ -5,6 +5,7 @@ import {
   parsePullsPage,
   performPrAction,
   summarizeChecks,
+  summarizeDiffstat,
   summarizeMergeBox,
   summarizeThreads,
 } from "../lib/github.js";
@@ -54,7 +55,8 @@ function pullNode(partial) {
     commentCount: partial.commentCount ?? 0,
     displayState: partial.displayState || "OPEN",
     isDraft: Boolean(partial.isDraft),
-    author: { displayLogin: "ada" },
+    author: { displayLogin: partial.author || "ada" },
+    state: partial.state || "",
     headSha: partial.headSha || "",
     category: partial.category || "",
     statusCheckRollup: partial.checkState ? { state: partial.checkState } : null,
@@ -420,6 +422,52 @@ test("every configured repository is included", async () => {
 
   const dashboard = await fetchPrDashboard({ username: "ada", repos: ["acme/web", "acme/api"] });
   assert.deepEqual(dashboard.open.map((pull) => pull.repo).sort(), ["acme/api", "acme/web"]);
+});
+
+test("diff stats come from the files tab counter", () => {
+  const html = `<span id="files_tab_counter" title="2">2</span><span id="diffstat"><span class="color-fg-success">+1,024</span><span class="color-fg-danger">−8</span></span>`;
+  assert.deepEqual(summarizeDiffstat(html), { changedFiles: 2, additions: 1024, deletions: 8 });
+  assert.equal(summarizeDiffstat("<html></html>"), null);
+});
+
+test("a watched pull from another author stays on the list", async () => {
+  installFetch(({ href }) => {
+    const url = new URL(href);
+    if (url.pathname.endsWith("/pulls")) {
+      const query = url.searchParams.get("q") || "";
+      if (url.pathname.includes("/other/lib/") && query.includes("is:pr 9") && !query.includes("review:")) {
+        return {
+          html: embedded([pullNode({
+            repo: "other/lib",
+            number: 9,
+            title: "Theirs",
+            updatedAt: hoursAgo(1),
+            author: "bob",
+            state: "OPEN",
+          })]),
+        };
+      }
+      return { html: embedded([]) };
+    }
+    if (href.includes("/pull/9/partials/tabs")) {
+      return {
+        html: `${META}<span id="files_tab_counter" title="2">2</span><span id="diffstat"><span class="color-fg-success">+4</span><span class="color-fg-danger">−1</span></span>`,
+      };
+    }
+    return href.includes("/page_data/") ? { status: 404, json: {} } : { html: META };
+  });
+
+  const dashboard = await fetchPrDashboard({
+    username: "ada",
+    repos: ["acme/web"],
+    watchedPulls: ["https://github.com/other/lib/pull/9"],
+  });
+  const watched = dashboard.open.find((pull) => pull.number === 9);
+  assert.equal(watched.repo, "other/lib");
+  assert.equal(watched.author, "bob");
+  assert.equal(watched.changedFiles, 2);
+  assert.equal(watched.additions, 4);
+  assert.equal(watched.deletions, 1);
 });
 
 test("settings and github errors fail before inventing pulls", async () => {

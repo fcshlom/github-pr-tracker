@@ -1,6 +1,6 @@
 import { getSettings, getCache, saveCache, getAlertSnapshot, saveAlertSnapshot, getAutopilotIds, setAutopilotId, getAutopilotAttempts, saveAutopilotAttempts } from "./lib/storage.js";
 import { fetchPrDashboard, performPrAction } from "./lib/github.js";
-import { alertTitle, diffPrAlerts } from "./lib/notify.js";
+import { alertMessage, alertTitle, diffPrAlerts } from "./lib/notify.js";
 import { shouldAutopilotMerge, shouldAutopilotUpdate } from "./lib/autopilot.js";
 
 const ALARM_NAME = "refresh-prs";
@@ -273,7 +273,7 @@ async function showPrAlerts(events) {
       type: "basic",
       iconUrl,
       title: alertTitle(event),
-      message: `${event.pull.repo} #${event.pull.number}: ${event.pull.title}`,
+      message: alertMessage(event),
       priority: 2,
     });
   }
